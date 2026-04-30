@@ -1,0 +1,101 @@
+# investigation/guardrails/config.yml
+# =====================================
+# NeMo Guardrails configuration for the AML Investigation Agent.
+#
+# This config is loaded by nemoguardrails.RailsConfig.from_path()
+# and wraps every LLM call in the AnalyzeNode and ReportNode.
+#
+# Rail types used:
+#   input  rails — check the prompt BEFORE it reaches the LLM
+#   output rails — check the LLM response BEFORE it is returned
+#   dialog rails — define canonical conversation flows
+#
+# Reference: https://docs.nvidia.com/nemo/guardrails/
+
+models:
+  - type: main
+    engine: nim          # NVIDIA NIM inference endpoint
+    model: meta/llama-3-70b-instruct
+    parameters:
+      temperature: 0.1   # Low temperature for deterministic compliance output
+      max_tokens: 1024
+
+# ---------------------------------------------------------------------------
+# Input rails — applied to every user/system message before LLM call
+# ---------------------------------------------------------------------------
+rails:
+  input:
+    flows:
+      - check pii in prompt
+      - check prompt injection
+
+  output:
+    flows:
+      - check hallucinated statutes
+      - check structured output format
+      - check no fabricated amounts
+
+# ---------------------------------------------------------------------------
+# Colang flow definitions (inline — can also be in separate .co files)
+# ---------------------------------------------------------------------------
+colang_content: |
+
+  # ── Input Rail 1: PII Detection ──────────────────────────────────────
+  define flow check pii in prompt
+    user ...
+    $has_pii = execute check_pii_action(text=$user_message)
+    if $has_pii
+      bot refuse pii
+      stop
+
+  define bot refuse pii
+    "I cannot process requests containing raw PII (SSN, passport numbers,
+     or biometric data). Please redact sensitive identifiers before submission."
+
+  # ── Input Rail 2: Prompt Injection Guard ─────────────────────────────
+  define flow check prompt injection
+    user ...
+    $is_injection = execute detect_prompt_injection(text=$user_message)
+    if $is_injection
+      bot refuse injection
+      stop
+
+  define bot refuse injection
+    "Potential prompt injection detected. This interaction has been logged."
+
+  # ── Output Rail 1: Hallucinated Statute Detection ────────────────────
+  define flow check hallucinated statutes
+    bot ...
+    $violations = execute check_statute_whitelist(text=$bot_message)
+    if $violations
+      bot flag statute violation
+      # Do NOT stop — return the response with a violation annotation
+      # so the ReportNode can log it and set status=DRAFT
+
+  define bot flag statute violation
+    "⚠ GUARDRAIL: Unverified legal citation detected. Review required before filing."
+
+  # ── Output Rail 2: Structured Output Enforcement ─────────────────────
+  define flow check structured output format
+    bot ...
+    $is_valid_json = execute validate_json_schema(text=$bot_message)
+    if not $is_valid_json
+      bot request reformatting
+      stop   # Trigger a retry from the calling node
+
+  define bot request reformatting
+    "Please reformat your response as valid JSON matching the required schema."
+
+  # ── Output Rail 3: Fabricated Amount Detection ───────────────────────
+  define flow check no fabricated amounts
+    bot ...
+    $has_fabrication = execute detect_fabricated_amounts(
+      response=$bot_message,
+      context=$evidence_amounts   # passed from AnalyzeNode/ReportNode
+    )
+    if $has_fabrication
+      bot warn fabrication
+      # Annotate but do not block — ReportNode sets status=DRAFT
+
+  define bot warn fabrication
+    "⚠ GUARDRAIL: Response contains monetary amounts not found in the evidence context."

@@ -1,0 +1,74 @@
+# =============================================================================
+# AML Hybrid System — Python Dependencies
+# =============================================================================
+# Install order matters for PyTorch Geometric (PyG).
+# Follow the numbered sections below.
+#
+# QUICK INSTALL (CPU-only dev / no GPU):
+#   pip install -r requirements.txt
+#
+# FULL INSTALL (CUDA 12.1 GPU):
+#   1. pip install torch==2.3.0 --index-url https://download.pytorch.org/whl/cu121
+#   2. pip install torch-geometric
+#   3. pip install pyg-lib torch-scatter torch-sparse \
+#         -f https://data.pyg.org/whl/torch-2.3.0+cu121.html
+#   4. pip install -r requirements.txt
+#
+# RAPIDS cuGraph (GPU only — Linux):
+#   conda install -c rapidsai -c conda-forge cugraph=24.04 python=3.11 cuda-version=12.1
+#
+# NVIDIA NeMo Guardrails:
+#   pip install nemoguardrails
+#
+# TensorRT (GPU only — must match CUDA version):
+#   pip install tensorrt pycuda
+#
+# Triton client:
+#   pip install tritonclient[grpc]
+# =============================================================================
+
+# ── Core Graph DB & Vector Store ─────────────────────────────────────────────
+neo4j>=5.18.0                   # Official Neo4j async Python driver
+pymilvus>=2.4.3                 # Milvus vector database client
+
+# ── LangGraph / LangChain (already installed — pinned for compatibility) ─────
+langgraph>=1.1.3
+langgraph-checkpoint>=4.0.1
+langchain>=1.2.0
+langchain-core>=1.2.0
+langchain-community>=0.4.0
+
+# ── LLM / NIM Integration ────────────────────────────────────────────────────
+openai>=1.30.0                  # NIM uses OpenAI-compatible API
+httpx>=0.27.0                   # Async HTTP for NIM endpoints
+
+# ── NeMo Guardrails ──────────────────────────────────────────────────────────
+# nemoguardrails>=0.9.0         # Uncomment after: pip install nemoguardrails
+
+# ── Data & ML ────────────────────────────────────────────────────────────────
+# torch>=2.3.0                  # Install separately with CUDA wheel (see above)
+# torch-geometric>=2.5.0        # Install separately with PyG wheel (see above)
+numpy>=1.26.0
+scipy>=1.13.0
+scikit-learn>=1.4.0
+
+# ── Embeddings ───────────────────────────────────────────────────────────────
+sentence-transformers>=3.0.0    # Used by RAGSearchNode for query embedding
+transformers>=4.40.0
+
+# ── Async & API ──────────────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.10.0
+pydantic-settings>=2.13.0
+
+# ── Utilities ────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+structlog>=24.1.0               # Structured logging
+tenacity>=8.3.0                 # Retry logic for DB/API calls
+rich>=13.7.0                    # CLI output formatting
+
+# ── Dev / Testing ────────────────────────────────────────────────────────────
+pytest>=8.2.0
+pytest-asyncio>=0.23.0
+pytest-mock>=3.14.0
