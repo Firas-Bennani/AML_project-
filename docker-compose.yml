@@ -1,0 +1,258 @@
+# =============================================================================
+# AML Hybrid Platform — docker-compose
+# =============================================================================
+# Brings up: ai, backend, frontend, postgres, redis, neo4j, milvus (+etcd+minio)
+#
+# Conventions:
+#   • All services join the default 'amlnet' network.
+#   • Host ports come from .env (FRONTEND_PORT, BACKEND_PORT, AI_PORT, ...).
+#   • Backend reads SECRET_KEY/DATABASE_URL — we alias them from
+#     BACKEND_JWT_SECRET / BACKEND_DB_URL here so .env follows the prefix rule.
+#   • The ai service is CPU-only by default. To enable GPU, install CUDA torch
+#     in ai/Dockerfile and uncomment the deploy.resources block on the ai svc.
+# =============================================================================
+
+networks:
+  amlnet:
+    name: amlnet
+
+volumes:
+  backend_data:
+  postgres_data:
+  redis_data:
+  neo4j_data:
+  neo4j_logs:
+  etcd_data:
+  minio_data:
+  milvus_data:
+
+services:
+  # ── AI microservice (FastAPI + HeteroGraphSAGE) ───────────────────────────
+  ai:
+    build:
+      context: ./ai
+      dockerfile: Dockerfile
+    image: aml-ai:latest
+    container_name: aml-ai
+    restart: unless-stopped
+    ports:
+      - "${AI_PORT:-8001}:8001"
+    environment:
+      AI_LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      AI_MOCK_EXTERNAL: ${AI_MOCK_EXTERNAL:-true}
+      AI_GNN_CHECKPOINT: ${AI_GNN_CHECKPOINT:-aml_model.pt}
+      AI_GNN_TRIGGER_THRESHOLD: ${AI_GNN_TRIGGER_THRESHOLD:-0.45}
+      # By default the service uses per-typology thresholds calibrated during
+      # training and saved in the checkpoint. Set AI_DETECT_THRESHOLDS in .env
+      # (e.g. "0.6,0.7,0.55") only to override without retraining.
+      AI_DETECT_THRESHOLDS: ${AI_DETECT_THRESHOLDS:-}
+      AI_NEO4J_URI: ${AI_NEO4J_URI:-bolt://neo4j:7687}
+      AI_NEO4J_USER: ${AI_NEO4J_USER:-neo4j}
+      AI_NEO4J_PASSWORD: ${AI_NEO4J_PASSWORD:-changeme_neo4j}
+      AI_MILVUS_HOST: ${AI_MILVUS_HOST:-milvus}
+      AI_MILVUS_PORT: ${AI_MILVUS_PORT:-19530}
+      AI_NIM_API_KEY: ${AI_NIM_API_KEY:-}
+      AI_NIM_BASE_URL: ${AI_NIM_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      AI_NIM_MODEL: ${AI_NIM_MODEL:-meta/llama-3-70b-instruct}
+    networks: [amlnet]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8001/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+    # GPU support (requires nvidia-container-runtime + CUDA torch wheels in
+    # ai/Dockerfile). Leave commented for CPU-only dev.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # ── Backend (FastAPI + SQLAlchemy + SQLite) ───────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: aml-backend:latest
+    container_name: aml-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      # Legacy un-prefixed names the existing code reads — aliased from BACKEND_*
+      SECRET_KEY: ${BACKEND_JWT_SECRET}
+      # Force absolute path inside the backend_data volume so SQLite persists
+      # across container recreation (the .env BACKEND_DB_URL is for local dev).
+      DATABASE_URL: sqlite:////app/data/aml.db
+      # New BACKEND_*-prefixed names read by app/services/ai_client.py and main.py
+      BACKEND_AI_BASE_URL: ${BACKEND_AI_BASE_URL:-http://ai:8001}
+      BACKEND_AI_DETECT_TIMEOUT_SECONDS: ${BACKEND_AI_DETECT_TIMEOUT_SECONDS:-10}
+      BACKEND_AI_INVESTIGATE_TIMEOUT_SECONDS: ${BACKEND_AI_INVESTIGATE_TIMEOUT_SECONDS:-60}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      BACKEND_FLAG_THRESHOLD: ${BACKEND_FLAG_THRESHOLD:-0.5}
+      DOCKER_CONTAINER: "1"
+    volumes:
+      - backend_data:/app/data
+      - ${PWD}/tests:/app/tests:ro
+    depends_on:
+      ai:
+        condition: service_started
+    networks: [amlnet]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 6
+
+  # ── Frontend (Vite dev server) ────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: aml-frontend:latest
+    container_name: aml-frontend
+    restart: unless-stopped
+    # Vite listens on 5173 inside the container; map to host 3000 per spec.
+    ports:
+      - "${FRONTEND_PORT:-3000}:5173"
+    environment:
+      # Vite proxies /api to the backend container's hostname inside amlnet
+      VITE_API_PROXY_TARGET: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_started
+    networks: [amlnet]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5173/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+
+  # ── Postgres (auxiliary; backend currently uses SQLite) ───────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: aml-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aml}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-aml}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [amlnet]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aml} -d ${POSTGRES_DB:-aml}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (auxiliary; not yet consumed by backend) ────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: aml-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks: [amlnet]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Neo4j (used by ai when AI_MOCK_EXTERNAL=false) ────────────────────────
+  neo4j:
+    image: neo4j:5-community
+    container_name: aml-neo4j
+    restart: unless-stopped
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    environment:
+      NEO4J_AUTH: ${NEO4J_AUTH:-neo4j/changeme_neo4j}
+      NEO4J_PLUGINS: ${NEO4J_PLUGINS:-["apoc"]}
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks: [amlnet]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+
+  # ── Milvus standalone stack (only used when AI_MOCK_EXTERNAL=false) ───────
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: aml-etcd
+    restart: unless-stopped
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    volumes:
+      - etcd_data:/etcd
+    command:
+      - etcd
+      - -advertise-client-urls=http://0.0.0.0:2379
+      - -listen-client-urls=http://0.0.0.0:2379
+      - --data-dir=/etcd
+    networks: [amlnet]
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  minio:
+    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
+    container_name: aml-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: minio server /minio_data --console-address ":9001"
+    volumes:
+      - minio_data:/minio_data
+    networks: [amlnet]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  milvus:
+    image: milvusdb/milvus:v2.4.4
+    container_name: aml-milvus
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    ports:
+      - "${MILVUS_PORT:-19530}:19530"
+    volumes:
+      - milvus_data:/var/lib/milvus
+    depends_on:
+      etcd:
+        condition: service_started
+      minio:
+        condition: service_started
+    networks: [amlnet]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      start_period: 90s
+      retries: 5

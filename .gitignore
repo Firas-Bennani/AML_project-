@@ -1,0 +1,125 @@
+# =============================================================================
+# AML Hybrid Platform — Root .gitignore (Python + Node + Infra)
+# =============================================================================
+# Service-local rules also live in ai/.gitignore, backend/.gitignore,
+# frontend/.gitignore — those scope additional rules to their subtree.
+
+# ── Secrets (NEVER commit) ────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+*.pem
+*.key
+secrets/
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.egg
+
+# ── Virtual environments ─────────────────────────────────────────────────────
+venv/
+env/
+.venv/
+ENV/
+
+# ── Node / Frontend ──────────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# ── Model checkpoints (generally large binaries, but keep the trained one) ──
+*.pt
+*.pth
+*.onnx
+*.trt
+*.engine
+*.plan
+!ai/aml_model.pt
+!ai/aml_model_v2.pt
+
+# ── Data files (large / sensitive) ───────────────────────────────────────────
+ai/data/
+*.csv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+
+# ── SAR reports (PII / sensitive banking data) ───────────────────────────────
+output/
+sar_reports/
+*.sar
+
+# ── SQLite / LangGraph checkpoint DBs ────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+aml_checkpoints.db
+backend/aml.db
+
+# ── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── IDE / Editor ─────────────────────────────────────────────────────────────
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+*.out
+
+# ── Testing / Coverage ───────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+.dockerenv
+
+# ── Windows ──────────────────────────────────────────────────────────────────
+desktop.ini
+$RECYCLE.BIN/
+
+# ── AI assistants / agent tooling (NEVER commit) ─────────────────────────────
+.claude/
+.gemini/
+.cursor/
+CLAUDE.md
+
+# ── IDE / Editor (additional) ────────────────────────────────────────────────
+.vscode/
+
+# ── Python tooling caches (additional) ───────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+
+# ── Model checkpoints (additional formats) ───────────────────────────────────
+*.ckpt
+*.bin
+
+# ── Node (additional) ────────────────────────────────────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp/

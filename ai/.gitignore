@@ -1,0 +1,99 @@
+# =============================================================================
+# AML HYBRID SYSTEM — .gitignore
+# =============================================================================
+
+# ─── CRITICAL: Real secrets — NEVER commit ───────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+*.pem
+*.key
+secrets/
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.egg
+
+# ─── Virtual environments ─────────────────────────────────────────────────────
+venv/
+env/
+.venv/
+.env_backup
+ENV/
+
+# ─── Model checkpoints (large binary files) ──────────────────────────────────
+*.pt
+*.pth
+*.onnx
+*.trt
+*.engine
+*.plan
+# Keep example checkpoint reference but not actual weights
+!checkpoints/.gitkeep
+
+# ─── Data files (can be large / sensitive) ───────────────────────────────────
+data/
+*.csv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+# But keep the data directory structure
+!data/.gitkeep
+
+# ─── SAR reports (contain PII / sensitive banking data) ──────────────────────
+output/
+sar_reports/
+*.sar
+*.pdf
+
+# ─── LangGraph / LangSmith ───────────────────────────────────────────────────
+aml_checkpoints.db
+*.db
+*.sqlite
+*.sqlite3
+langgraph_cache/
+
+# ─── Jupyter ─────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ─── IDE / Editor ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+logs/
+*.out
+
+# ─── Testing / Coverage ──────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+.dockerenv
+
+# ─── Windows ─────────────────────────────────────────────────────────────────
+desktop.ini
+$RECYCLE.BIN/

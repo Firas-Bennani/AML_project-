@@ -1,0 +1,19 @@
+# Keep build context small. service.py never reads data/ — only train.py does.
+data/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.db
+*.sqlite*
+.env
+.env.*
+.git
+.gitignore
+.venv/
+venv/
+.pytest_cache/
+*.ipynb
+.ipynb_checkpoints/
+output/
+sar_reports/
