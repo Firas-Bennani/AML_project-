@@ -203,12 +203,12 @@ checkpoint, so inference uses the same cutoffs the model was calibrated for.
 
 ## Academic context
 
-Final-year engineering project (Projet de Fin d'Études), 2025–2026.
+Final-year engineering project (Projet de Fin d'Année), 2025–2026.
 
 ## License
 
-All rights reserved — academic project (PFE 2025–2026), not for redistribution.
+All rights reserved — academic project (PFA 2025–2026), not for redistribution.
 
 ## Author
 
-**Firas Bennani** — _LinkedIn / contact: TBD_
+**Firas Bennani** — _[LinkedIn](www.linkedin.com/in/firas-bennani-a57482160) / contact: firas.bennani29@gmail.com
